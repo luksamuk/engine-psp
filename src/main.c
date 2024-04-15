@@ -116,7 +116,7 @@ main(int argc, char **argv)
         SCREEN_WIDTH,
         SCREEN_HEIGHT,
         0);
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Rect square = {216, 96, 34, 64};
 
     int running = 1;
