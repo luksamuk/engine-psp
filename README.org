@@ -1,0 +1,16 @@
+#+title: engine-psp
+
+* About
+
+Luksamuk's Engine (PSP Edition)
+
+* Important notice
+
+This project  uses a somewhat modified  version of [[https://github.com/SanderMertens/flecs][FLECS]] that  compiles with the
+PSP development toolchain. Modifications were  necessary since the PSP toolchain
+is not exactly POSIX-compliant.
+
+* License
+
+This project is distributed under the MIT License.
+
