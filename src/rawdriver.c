@@ -18,6 +18,9 @@ PSP_HEAP_SIZE_KB(-1024);
 #define SCREEN_WIDTH  480
 #define SCREEN_HEIGHT BUFFER_HEIGHT
 #define MUSIC_PATH "assets/walkin.mp3"
+#define DESIRED_FPS 60
+
+#define FPSCONVERT(x, dt) (x * dt * DESIRED_FPS)
 
 char      list[0x20000]        __attribute__((aligned(64)));
 char      mp3Buf[16*1024]      __attribute__((aligned(64)));
@@ -46,9 +49,6 @@ const float speed = 0.4f;
 const float decel = speed * 0.6f;
 const float max_speed = 6.0f;
 const float bounce_back = 2.0f;
-
-/* static Position p = {32, 32}; */
-/* static Velocity v = {0, 0}; */
 
 
 
@@ -91,8 +91,7 @@ main(void)
     if(cb_tid >= 0) sceKernelStartThread(cb_tid, 0, 0);
 
     // Load modules
-    int status;
-    status = sceUtilityLoadModule(PSP_MODULE_AV_AVCODEC);
+    int status = sceUtilityLoadModule(PSP_MODULE_AV_AVCODEC);
     if(status < 0) {
         ERRORMSG("ERROR: sceUtilityLoadModule(PSP_MODULE_AV_AVCODEC) returned 0x%08X\n", status);
     }
@@ -130,6 +129,10 @@ main(void)
 
     // Fill stream buffer with some data for a start
     fillAudioStreamBuffer(fd, handle);
+    status = sceMp3Init(handle);
+    if(status < 0) {
+        ERRORMSG("ERROR: sceMp3Init returned 0x%08X\n", status);
+    }
 
     /* Playback variables */
     int channel = -1;
@@ -302,11 +305,9 @@ fillAudioStreamBuffer(int fd, int handle)
     SceUChar8 *dst;
     SceInt32 write;
     SceInt32 pos;
-    int status;
-    int amount_read;
 
     // Get stream info (where to fill, how much to fill, where to fill from)
-    status = sceMp3GetInfoToAddStreamData(handle, &dst, &write, &pos);
+    int status = sceMp3GetInfoToAddStreamData(handle, &dst, &write, &pos);
     if(status < 0) {
         ERRORMSG("ERROR: sceMp3GetInfoToAddStreamData returned 0x%08X\n", status);
     }
@@ -318,7 +319,7 @@ fillAudioStreamBuffer(int fd, int handle)
     }
 
     // Read data
-    amount_read = sceIoRead(fd, dst, write);
+    int amount_read = sceIoRead(fd, dst, write);
     if(amount_read < 0) {
         ERRORMSG("ERROR: Could not read from file - 0x%08X\n", amount_read);
     }
@@ -372,22 +373,26 @@ void
 ControlVelocity(ecs_iter_t *it)
 {
     Velocity *v = ecs_field(it, Velocity, 1);
+
+    float speed_dt = FPSCONVERT(speed, it->delta_time);
+    float decel_dt = FPSCONVERT(decel, it->delta_time);
+
     int i;
     for(i = 0; i < it->count; i++) {
-        if(press_up) v[i].y -= speed;
-        if(press_down) v[i].y += speed;
-        if(press_left) v[i].x -= speed;
-        if(press_right) v[i].x += speed;
+        if(press_up) v[i].y -= speed_dt;
+        if(press_down) v[i].y += speed_dt;
+        if(press_left) v[i].x -= speed_dt;
+        if(press_right) v[i].x += speed_dt;
 
         if(!press_left && !press_right) {
-            if(v[i].x > decel) v[i].x -= decel;
-            else if(v[i].x < -decel) v[i].x += decel;
+            if(v[i].x > decel) v[i].x -= decel_dt;
+            else if(v[i].x < -decel) v[i].x += decel_dt;
             else v[i].x = 0.0f;
         }
 
         if(!press_up && !press_down) {
-            if(v[i].y > decel) v[i].y -= decel;
-            else if(v[i].y < -decel) v[i].y += decel;
+            if(v[i].y > decel) v[i].y -= decel_dt;
+            else if(v[i].y < -decel) v[i].y += decel_dt;
             else v[i].y = 0.0f;
         }
 
