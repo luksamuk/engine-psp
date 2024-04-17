@@ -8,13 +8,12 @@ target_include_directories(flecs PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/deps/flecs/>)
 
 add_executable(${PROJECT_NAME}
-  src/rawdriver.c)
+  src/main.c)
 
 include(FindPkgConfig)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/deps/flecs/>
-
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE

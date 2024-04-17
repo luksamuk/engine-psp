@@ -2,5 +2,5 @@
 
 mkdir -p build
 cd build
-cmake ..
+psp-cmake -DBUILD_PRX=1 -DENC_PRX=1 ..
 exec make
