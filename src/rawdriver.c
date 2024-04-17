@@ -7,6 +7,7 @@
 #include <pspmp3.h>
 #include <psputility.h>
 #include <stdio.h>
+#include <flecs.h>
 
 PSP_MODULE_INFO("Luksamuk PSP Engine", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
@@ -46,8 +47,8 @@ const float decel = speed * 0.6f;
 const float max_speed = 6.0f;
 const float bounce_back = 2.0f;
 
-static Position p = {32, 32};
-static Velocity v = {0, 0};
+/* static Position p = {32, 32}; */
+/* static Velocity v = {0, 0}; */
 
 
 
@@ -74,9 +75,9 @@ int  callback_thread(SceSize, void *);
 int  exit_cb(int, int, void *);
 void drawRect(float, float, float, float);
 int  fillAudioStreamBuffer(int, int);
-/* void MoveBody(ecs_iter_t *); */
-/* void ControlVelocity(ecs_iter_t *); */
-/* void RenderBody(ecs_iter_t *); */
+void MoveBody(ecs_iter_t *);
+void ControlVelocity(ecs_iter_t *);
+void RenderBody(ecs_iter_t *);
 
 // Entrypoint
 int
@@ -158,9 +159,22 @@ main(void)
     sceGuFinish();
     sceGuDisplay(GU_TRUE);
 
+    // Initialize controller
     SceCtrlData pad;
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
+
+    // Initialize ECS
+    ecs_world_t *world = ecs_init();
+    ECS_COMPONENT(world, Position);
+    ECS_COMPONENT(world, Velocity);
+    ECS_SYSTEM(world, MoveBody, EcsOnUpdate, Position, Velocity);
+    ECS_SYSTEM(world, ControlVelocity, EcsOnUpdate, Velocity);
+    ECS_SYSTEM(world, RenderBody, EcsPostUpdate, Position);
+
+    ecs_entity_t e = ecs_new_id(world);
+    ecs_set(world, e, Position, {32, 32});
+    ecs_set(world, e, Velocity, {0, 0});
 
     while(RUNNING) {
         /* Update audio */
@@ -220,62 +234,12 @@ main(void)
             RUNNING = 0;
         }
 
-        /* Physics */
-        // Move body
-        p.x += v.x;
-        p.y += v.y;
-
-        if(p.x > SCREEN_WIDTH - 32) {
-            p.x = SCREEN_WIDTH - 32;
-            v.x = -bounce_back;
-        }
-
-        if(p.x < 0.0f) {
-            p.x = 0.0f;
-            v.x = bounce_back;
-        }
-
-        if(p.y > SCREEN_HEIGHT - 32) {
-            p.y = SCREEN_HEIGHT - 32;
-            v.y = -bounce_back;
-        }
-
-        if(p.y < 0.0f) {
-            p.y = 0.0f;
-            v.y = bounce_back;
-        }
-
-        // Control velocity
-        if(press_up) v.y -= speed;
-        if(press_down) v.y += speed;
-        if(press_left) v.x -= speed;
-        if(press_right) v.x += speed;
-
-        if(!press_left && !press_right) {
-            if(v.x > decel) v.x -= decel;
-            else if(v.x < -decel) v.x += decel;
-            else v.x = 0.0f;
-        }
-
-        if(!press_up && !press_down) {
-            if(v.y > decel) v.y -= decel;
-            else if(v.y < -decel) v.y += decel;
-            else v.y = 0.0f;
-        }
-
-
-        if(v.x > max_speed) v.x = max_speed;
-        if(v.x < -max_speed) v.x = -max_speed;
-
-        if(v.y > max_speed) v.y = max_speed;
-        if(v.y < -max_speed) v.y = -max_speed;
-
         /* Rendering */
         sceGuStart(GU_DIRECT, list);
         sceGuClearColor(0xff000000); // ABGR
         sceGuClear(GU_COLOR_BUFFER_BIT);
 
-        drawRect(p.x, p.y, 32, 32);
+        ecs_progress(world, 0);
 
         sceGuFinish();
         sceGuSync(0, 0);
@@ -369,3 +333,81 @@ fillAudioStreamBuffer(int fd, int handle)
 
     return (pos > 0);
 }
+
+
+void
+MoveBody(ecs_iter_t *it)
+{
+    Position *p = ecs_field(it, Position, 1);
+    Velocity *v = ecs_field(it, Velocity, 2);
+
+    int i;
+    for(i = 0; i < it->count; i++) {
+        p[i].x += v[i].x;
+        p[i].y += v[i].y;
+
+        if(p[i].x > SCREEN_WIDTH - 32) {
+            p[i].x = SCREEN_WIDTH - 32;
+            v[i].x = -bounce_back;
+        }
+
+        if(p[i].x < 0.0f) {
+            p[i].x = 0.0f;
+            v[i].x = bounce_back;
+        }
+
+        if(p[i].y > SCREEN_HEIGHT - 32) {
+            p[i].y = SCREEN_HEIGHT - 32;
+            v[i].y = -bounce_back;
+        }
+
+        if(p[i].y < 0.0f) {
+            p[i].y = 0.0f;
+            v[i].y = bounce_back;
+        }
+    }
+}
+
+void
+ControlVelocity(ecs_iter_t *it)
+{
+    Velocity *v = ecs_field(it, Velocity, 1);
+    int i;
+    for(i = 0; i < it->count; i++) {
+        if(press_up) v[i].y -= speed;
+        if(press_down) v[i].y += speed;
+        if(press_left) v[i].x -= speed;
+        if(press_right) v[i].x += speed;
+
+        if(!press_left && !press_right) {
+            if(v[i].x > decel) v[i].x -= decel;
+            else if(v[i].x < -decel) v[i].x += decel;
+            else v[i].x = 0.0f;
+        }
+
+        if(!press_up && !press_down) {
+            if(v[i].y > decel) v[i].y -= decel;
+            else if(v[i].y < -decel) v[i].y += decel;
+            else v[i].y = 0.0f;
+        }
+
+
+        if(v[i].x > max_speed) v[i].x = max_speed;
+        if(v[i].x < -max_speed) v[i].x = -max_speed;
+
+        if(v[i].y > max_speed) v[i].y = max_speed;
+        if(v[i].y < -max_speed) v[i].y = -max_speed;
+    }
+}
+
+void
+RenderBody(ecs_iter_t *it)
+{
+    Position *p = ecs_field(it, Position, 1);
+
+    int i;
+    for(i = 0; i < it->count; i++) {
+        drawRect(p[i].x, p[i].y, 32, 32);
+    }
+}
+
