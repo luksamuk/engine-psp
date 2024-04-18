@@ -1,5 +1,4 @@
 #include <pspkernel.h>
-#include <pspctrl.h>
 #include <pspgu.h>
 #include <pspdisplay.h>
 #include <pspaudio.h>
@@ -11,6 +10,7 @@
 #include <engine_graphics.h>
 #include <engine_types.h>
 #include <engine_error.h>
+#include <engine_control.h>
 
 PSP_MODULE_INFO("Luksamuk PSP Engine", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
@@ -24,11 +24,6 @@ SceUChar8 pcmBuf[16*(1152/2)]  __attribute__((aligned(64)));
 
 
 static int RUNNING = 1;
-
-static int press_up = 0;
-static int press_down = 0;
-static int press_left = 0;
-static int press_right = 0;
 
 const float speed = 0.4f;
 const float decel = speed * 0.6f;
@@ -104,7 +99,7 @@ main(void)
     int numChannels = sceMp3GetMp3ChannelNum(handle);
     int lastDecoded = 0;
     int volume = PSP_AUDIO_VOLUME_MAX;
-    int numPlayed = 0;
+    int numPlayed = 0; // Number of played samples
     //int paused = 0;
 
     sceMp3SetLoopNum(handle, -1);
@@ -113,9 +108,7 @@ main(void)
     
 
     // Initialize controller
-    SceCtrlData pad;
-    sceCtrlSetSamplingCycle(0);
-    sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
+    controlInit();
 
     // Initialize ECS
     ecs_world_t *world = ecs_init();
@@ -131,6 +124,8 @@ main(void)
 
     while(RUNNING) {
         /* Update audio */
+        // Current playTime (seconds): (samplingRate > 0 ? numPlayed / samplingRate : 0)
+        
         // Get data if needed
         if(sceMp3CheckStreamDataNeeded(handle) > 0) {
             fillAudioStreamBuffer(fd, handle);
@@ -176,14 +171,9 @@ main(void)
         
 
         /* Controls */
-        // Read controls
-        sceCtrlReadBufferPositive(&pad, 1);
-        press_up = (pad.Buttons & PSP_CTRL_UP);
-        press_down = (pad.Buttons & PSP_CTRL_DOWN);
-        press_left = (pad.Buttons & PSP_CTRL_LEFT);
-        press_right = (pad.Buttons & PSP_CTRL_RIGHT);
+        controlUpdate();
 
-        if(pad.Buttons & PSP_CTRL_CIRCLE) {
+        if(isPressing(CTRLCIRCLE)) {
             RUNNING = 0;
         }
 
@@ -306,18 +296,25 @@ ControlVelocity(ecs_iter_t *it)
 
     int i;
     for(i = 0; i < it->count; i++) {
-        if(press_up) v[i].y -= speed_dt;
-        if(press_down) v[i].y += speed_dt;
-        if(press_left) v[i].x -= speed_dt;
-        if(press_right) v[i].x += speed_dt;
+        vec2 analog = getAnalog();
 
-        if(!press_left && !press_right) {
+        int up = isPressing(CTRLUP) || (analog.y < 0.0f);
+        int down = isPressing(CTRLDOWN) || (analog.y > 0.0f);
+        int left = isPressing(CTRLLEFT) || (analog.x < 0.0f);
+        int right = isPressing(CTRLRIGHT) || (analog.x > 0.0f);
+        
+        if(up) v[i].y -= speed_dt;
+        if(down) v[i].y += speed_dt;
+        if(left) v[i].x -= speed_dt;
+        if(right) v[i].x += speed_dt;
+
+        if(!left && !right) {
             if(v[i].x > decel) v[i].x -= decel_dt;
             else if(v[i].x < -decel) v[i].x += decel_dt;
             else v[i].x = 0.0f;
         }
 
-        if(!press_up && !press_down) {
+        if(!up && !down) {
             if(v[i].y > decel) v[i].y -= decel_dt;
             else if(v[i].y < -decel) v[i].y += decel_dt;
             else v[i].y = 0.0f;
