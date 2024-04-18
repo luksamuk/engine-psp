@@ -7,12 +7,14 @@ add_library(flecs ${FLECS_SRC})
 target_include_directories(flecs PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/deps/flecs/>)
 
-add_executable(${PROJECT_NAME}
-  src/main.c)
+file(GLOB ENGINE_SRC ${CMAKE_CURRENT_LIST_DIR}/src/*.c)
+
+add_executable(${PROJECT_NAME} ${ENGINE_SRC})
 
 include(FindPkgConfig)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include/>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/deps/flecs/>
 )
 

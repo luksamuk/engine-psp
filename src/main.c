@@ -9,34 +9,19 @@
 #include <stdio.h>
 #include <flecs.h>
 
+#include <engine_graphics.h>
+#include <engine_types.h>
+
 PSP_MODULE_INFO("Luksamuk PSP Engine", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 PSP_HEAP_SIZE_KB(-1024);
 
-#define BUFFER_WIDTH  512
-#define BUFFER_HEIGHT 272
-#define SCREEN_WIDTH  480
-#define SCREEN_HEIGHT BUFFER_HEIGHT
 #define MUSIC_PATH "assets/walkin.mp3"
-#define DESIRED_FPS 60
 
-#define FPSCONVERT(x, dt) (x * dt * DESIRED_FPS)
 
-char      list[0x20000]        __attribute__((aligned(64)));
 char      mp3Buf[16*1024]      __attribute__((aligned(64)));
 SceUChar8 pcmBuf[16*(1152/2)]  __attribute__((aligned(64)));
 
-typedef struct {
-    float x, y;
-} vec2;
-
-typedef struct {
-    unsigned short u, v;
-    short x, y, z;
-} vertex;
-
-typedef vec2 Position;
-typedef vec2 Velocity;
 
 static int RUNNING = 1;
 
@@ -54,7 +39,7 @@ const float bounce_back = 2.0f;
 
 #define printf  pspDebugScreenPrintf
 #define ERRORMSG(...) { char msg[128]; sprintf(msg,__VA_ARGS__); error(msg); }
-void error( char* msg )
+void error(char *msg)
 {
     SceCtrlData pad;
     pspDebugScreenClear();
@@ -73,7 +58,6 @@ void error( char* msg )
 
 int  callback_thread(SceSize, void *);
 int  exit_cb(int, int, void *);
-void drawRect(float, float, float, float);
 int  fillAudioStreamBuffer(int, int);
 void MoveBody(ecs_iter_t *);
 void ControlVelocity(ecs_iter_t *);
@@ -83,6 +67,9 @@ void RenderBody(ecs_iter_t *);
 int
 main(void)
 {
+    // Initialize GU
+    initGu();
+    
     pspDebugScreenInit();
     pspDebugScreenClear();
     
@@ -146,21 +133,7 @@ main(void)
     sceMp3SetLoopNum(handle, -1);
     sceMp3ResetPlayPosition(handle);
     
-    // Initialize GU
-    sceGuInit();
-    sceGuStart(GU_DIRECT, list);
-    sceGuDrawBuffer(GU_PSM_8888, (void*)0, BUFFER_WIDTH);
-    sceGuDispBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, (void*)0x88000, BUFFER_WIDTH);
-    sceGuDepthBuffer((void*)0x110000, BUFFER_WIDTH);
-    sceGuOffset(2048 - (SCREEN_WIDTH / 2), 2048 - (SCREEN_HEIGHT / 2));
-    sceGuViewport(2048, 2048, SCREEN_WIDTH, SCREEN_HEIGHT);
-    sceGuEnable(GU_SCISSOR_TEST);
-    sceGuScissor(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    sceGuDepthRange(65535, 0);
-    sceGuDepthFunc(GU_GEQUAL);
-    sceGuEnable(GU_DEPTH_TEST);
-    sceGuFinish();
-    sceGuDisplay(GU_TRUE);
+    
 
     // Initialize controller
     SceCtrlData pad;
@@ -238,16 +211,11 @@ main(void)
         }
 
         /* Rendering */
-        sceGuStart(GU_DIRECT, list);
-        sceGuClearColor(0xff000000); // ABGR
-        sceGuClear(GU_COLOR_BUFFER_BIT);
+        guRenderStart();
 
         ecs_progress(world, 0);
 
-        sceGuFinish();
-        sceGuSync(0, 0);
-        sceDisplayWaitVblankStart();
-        sceGuSwapBuffers();
+        guRenderEnd();
     }
 
     // Cleanup
@@ -256,8 +224,7 @@ main(void)
     status = sceMp3TermResource();
     status = sceIoClose(fd);
 
-    sceGuDisplay(GU_FALSE);
-    sceGuTerm();
+    disposeGu();
 
     sceKernelExitGame();
     return 0;
@@ -280,23 +247,6 @@ exit_cb(int arg1, int arg2, void *common)
 {
     RUNNING = 0;
     return 0;
-}
-
-void
-drawRect(float x, float y, float w, float h)
-{
-    // This is not permanent memory allocation. The memory will be invalid
-    // as soon as the same display list starts being filled again, so no
-    // need to deallocate stuff here
-    vertex *vertices = (vertex*)sceGuGetMemory(2 * sizeof(vertex));
-
-    vertices[0].x = x;
-    vertices[0].y = y;
-    vertices[1].x = x + w;
-    vertices[1].y = y + h;
-
-    sceGuColor(0xff0000ff); // red (ABGR)
-    sceGuDrawArray(GU_SPRITES, GU_TEXTURE_16BIT | GU_VERTEX_16BIT | GU_TRANSFORM_2D, 2, 0, vertices);
 }
 
 int
