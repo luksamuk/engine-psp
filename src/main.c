@@ -1,5 +1,4 @@
 #include <pspkernel.h>
-#include <pspdebug.h>
 #include <pspctrl.h>
 #include <pspgu.h>
 #include <pspdisplay.h>
@@ -11,6 +10,7 @@
 
 #include <engine_graphics.h>
 #include <engine_types.h>
+#include <engine_error.h>
 
 PSP_MODULE_INFO("Luksamuk PSP Engine", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
@@ -36,26 +36,6 @@ const float max_speed = 6.0f;
 const float bounce_back = 2.0f;
 
 
-
-#define printf  pspDebugScreenPrintf
-#define ERRORMSG(...) { char msg[128]; sprintf(msg,__VA_ARGS__); error(msg); }
-void error(char *msg)
-{
-    SceCtrlData pad;
-    pspDebugScreenClear();
-    pspDebugScreenSetXY(0, 0);
-    printf(msg);
-    printf("Press X to quit.\n");
-    while(RUNNING) {
-        sceCtrlReadBufferPositive(&pad, 1);
-        if (pad.Buttons & PSP_CTRL_CROSS)
-            break;
-        sceDisplayWaitVblankStart();
-    }
-    sceKernelExitGame();
-}
-
-
 int  callback_thread(SceSize, void *);
 int  exit_cb(int, int, void *);
 int  fillAudioStreamBuffer(int, int);
@@ -69,9 +49,6 @@ main(void)
 {
     // Initialize GU
     initGu();
-    
-    pspDebugScreenInit();
-    pspDebugScreenClear();
     
     // Setup callbacks
     int cb_tid = sceKernelCreateThread("callback_thread", callback_thread, 0x11, 0xFA0, 0, 0);

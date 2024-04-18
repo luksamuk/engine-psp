@@ -1,6 +1,7 @@
 #include <engine_graphics.h>
 #include <pspgu.h>
 #include <pspdisplay.h>
+#include <pspdebug.h>
 
 #include <engine_types.h>
 
@@ -23,6 +24,9 @@ initGu(void)
     sceGuEnable(GU_DEPTH_TEST);
     sceGuFinish();
     sceGuDisplay(GU_TRUE);
+
+    pspDebugScreenInit();
+    pspDebugScreenClear();
 }
 
 void
